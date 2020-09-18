@@ -1,4 +1,6 @@
 use std::fs::File;
+use std::sync::mpsc::channel;
+use std::{thread, time};
 
 use minimp3::{Decoder, Error, Frame};
 use pbr::ProgressBar;
@@ -10,6 +12,12 @@ struct Configuration<'a> {
     analysis_interval: usize,
     min_bpm: usize,
     max_bpm: usize,
+}
+
+enum State {
+    Start,
+    Step,
+    End,
 }
 
 fn get_configuration<'a>() -> Configuration<'a> {
@@ -80,20 +88,21 @@ fn get_windows<'a>(
     music: &'a [f32],
     conf: &Configuration,
     sample_rate: usize,
-) -> Vec<(&'a [f32], &'a [f32])> {
+) -> Vec<(usize, &'a [f32], &'a [f32])> {
     let window_size = sample_rate * conf.analysis_interval / 1000;
     let interval_size = sample_rate * conf.time_interval / 1000;
 
     let samples_from = conf.min_bpm * sample_rate / 60;
     let samples_to = conf.max_bpm * sample_rate / 60;
 
-    let mut windows: Vec<(&'a [f32], &'a [f32])> = Vec::new();
+    let mut windows: Vec<(usize, &'a [f32], &'a [f32])> = Vec::new();
 
     for window_index in 0..((music.len() - window_size - samples_to) / interval_size) {
         let start_index = window_index * interval_size;
         let end_index = start_index + window_size;
 
         windows.push((
+            window_index,
             &music[start_index..end_index],
             &music[(start_index + samples_from)..(end_index + samples_to)],
         ));
@@ -234,21 +243,55 @@ fn main() {
     let samples_from = conf.min_bpm * sample_rate / 60;
 
     println!("Analysing music...");
+
+    let (sender, receiver) = channel();
+
+    let music_windows_len = music_windows.len() as u64;
+    thread::spawn(move || {
+        let mut pb = ProgressBar::new(music_windows_len);
+
+        loop {
+            match receiver.try_recv() {
+                Ok(state) => match state {
+                    State::Start => {
+                        pb.set(0);
+                    }
+                    State::Step => {
+                        pb.inc();
+                    }
+                    State::End => {
+                        pb.finish();
+                        break;
+                    }
+                },
+                Err(_) => {}
+            }
+
+            thread::sleep(time::Duration::from_secs(1));
+        }
+    });
+
+    sender.send(State::Start).unwrap();
+    let end_sender = sender.clone();
+
     let bpms: Vec<f32> = music_windows
-        .par_iter()
-        .map(|(win_a, win_b)| {
-            println!("Corr start");
-            let correlation = get_correlation(win_a, win_b);
-            println!("Corr end");
-            correlation
-        })
-        .map(|correlation| {
+        .into_par_iter()
+        .map_with(sender, |s, windows| {
+            let correlation = get_correlation(windows.1, windows.2);
+
             let (_, index) = get_max(correlation);
             let bpm = (samples_from + index) as f32 * 60.0 / sample_rate as f32;
-            println!("BPM: {}", bpm);
+            s.send(State::Step).unwrap();
+
             bpm
         })
         .collect();
+
+    end_sender.send(State::End).unwrap();
+
+    for (index, bpm) in bpms.iter().enumerate() {
+        println!("{}s BPM: {}", index, bpm);
+    }
 
     /* get_bpm(
         music,
