@@ -22,7 +22,7 @@ enum State {
 
 fn get_configuration<'a>() -> Configuration<'a> {
     Configuration {
-        file_path: ".\\__example\\mix.mp3",
+        file_path: ".\\__example\\mix10s.mp3",
         time_interval: 1000,
         analysis_interval: 5000,
         min_bpm: 90,
@@ -127,7 +127,6 @@ fn get_correlation(win_a: &[f32], win_b: &[f32]) -> Vec<f32> {
     correlation
 }
 
-
 fn get_max(data: Vec<f32>) -> (f32, usize) {
     let mut value = std::f32::MIN;
     let mut index = 0;
@@ -140,43 +139,6 @@ fn get_max(data: Vec<f32>) -> (f32, usize) {
     }
 
     (value, index)
-}
-
-fn get_bpm(
-    music: &Vec<f32>,
-    music_windows: &Vec<Vec<f32>>,
-    sample_rate: i32,
-    time_interval: i32,
-    min_bpm: i32,
-    max_bpm: i32,
-) -> Vec<f32> {
-    let music_windows_len = music_windows.len();
-    let time_interval_size = sample_rate * time_interval / 1000;
-    let samples_from = min_bpm * sample_rate / 60;
-    let samples_to = max_bpm * sample_rate / 60;
-
-    let mut bpms: Vec<f32> = Vec::with_capacity(music_windows_len);
-
-    for (i, window) in music_windows.iter().enumerate() {
-        let correlation_from = i * time_interval_size as usize + samples_from as usize;
-        let correlation_to = i * time_interval_size as usize + samples_to as usize;
-
-        // let correlation = get_correlation(music, window, correlation_from, correlation_to);
-        let correlation = Vec::new();
-
-        // TODO: next version filter the corelation result?
-        let (_, index) = get_max(correlation);
-        let bpm = (samples_from + index as i32) as f32 * 60.0 / sample_rate as f32;
-
-        println!(
-            "{}s: {} BPM ({}%)",
-            i as i32 * time_interval / 1000,
-            bpm,
-            100 * i / music_windows_len,
-        );
-    }
-
-    bpms
 }
 
 fn main() {
@@ -249,7 +211,11 @@ fn main() {
     end_sender.send(State::End).unwrap();
 
     for (index, bpm) in bpms.iter().enumerate() {
-        println!("{}s BPM: {}", index as f32 /, bpm);
+        println!(
+            "{}s BPM: {}",
+            (index * conf.time_interval) as f32 / 1000f32,
+            bpm
+        );
     }
 
     println!("Done :)");
