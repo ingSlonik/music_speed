@@ -22,7 +22,7 @@ enum State {
 
 fn get_configuration<'a>() -> Configuration<'a> {
     Configuration {
-        file_path: ".\\example\\mix.mp3",
+        file_path: ".\\__example\\mix.mp3",
         time_interval: 1000,
         analysis_interval: 5000,
         min_bpm: 90,
@@ -113,7 +113,6 @@ fn get_windows<'a>(
 
 fn get_correlation(win_a: &[f32], win_b: &[f32]) -> Vec<f32> {
     let size = win_b.len() - win_a.len();
-    // let mut pb = ProgressBar::new(size as u64);
 
     let mut correlation: Vec<f32> = Vec::with_capacity(size);
 
@@ -123,31 +122,11 @@ fn get_correlation(win_a: &[f32], win_b: &[f32]) -> Vec<f32> {
             value += *win_a_sample * win_b[size_index + win_a_index];
         }
         correlation.push(value);
-
-        if size_index % 1000 == 0 {
-            //pb.set(size_index as u64);
-        }
     }
-
-    // pb.finish();
 
     correlation
 }
 
-/*
-fn get_correlation_fft(
-    music: &Vec<f32>,
-    window: &Vec<f32>,
-    correlation_from: i32,
-    correlation_to: i32,
-) -> Vec<f32> {
-    let window_size = window.len();
-    let count = correlation_to - correlation_from + 1;
-    let mut vector = vec![1, 2, 3];
-
-    vector
-}
-*/
 
 fn get_max(data: Vec<f32>) -> (f32, usize) {
     let mut value = std::f32::MIN;
@@ -200,26 +179,6 @@ fn get_bpm(
     bpms
 }
 
-/*
-fn show_results(results: Vec<i32>, time_interval: i32) {
-    let mut time = 0;
-    for result in results {
-        println!("{}s: {} BPM", time / 1000, result);
-        time = time + time_interval;
-    }
-}
-
-fn get_avg(data: &Vec<i16>) -> i16 {
-    let len = data.len() as i32;
-    let mut sum: i32 = 0;
-    for sample in data {
-        sum += *sample as i32;
-    }
-
-    (sum / len) as i16
-}
-*/
-
 fn main() {
     println!("Welcome in Speed of Music v0.1.0.\n");
 
@@ -242,7 +201,7 @@ fn main() {
 
     let samples_from = conf.min_bpm * sample_rate / 60;
 
-    println!("Analysing music...");
+    println!("Analyzing music...");
 
     let (sender, receiver) = channel();
 
@@ -290,19 +249,8 @@ fn main() {
     end_sender.send(State::End).unwrap();
 
     for (index, bpm) in bpms.iter().enumerate() {
-        println!("{}s BPM: {}", index, bpm);
+        println!("{}s BPM: {}", index as f32 /, bpm);
     }
 
-    /* get_bpm(
-        music,
-        music_windows,
-        sample_rate,
-        time_interval,
-        min_bpm,
-        max_bpm,
-    ); */
-
     println!("Done :)");
-    // Show results in analysing
-    // show_results(results, time_interval);
 }
