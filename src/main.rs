@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::sync::mpsc::channel;
-use std::{thread, time};
+use std::thread;
 
 use minimp3::{Decoder, Error, Frame};
 use pbr::ProgressBar;
@@ -23,8 +23,8 @@ enum State {
 fn get_configuration<'a>() -> Configuration<'a> {
     Configuration {
         file_path: ".\\__example\\mix10s.mp3",
-        time_interval: 1000,
-        analysis_interval: 5000,
+        time_interval: 500,
+        analysis_interval: 2000,
         min_bpm: 90,
         max_bpm: 180,
     }
@@ -172,7 +172,7 @@ fn main() {
         let mut pb = ProgressBar::new(music_windows_len);
 
         loop {
-            match receiver.try_recv() {
+            match receiver.recv() {
                 Ok(state) => match state {
                     State::Start => {
                         pb.set(0);
@@ -185,10 +185,11 @@ fn main() {
                         break;
                     }
                 },
-                Err(_) => {}
+                Err(_) => {
+                    pb.finish();
+                    break;
+                }
             }
-
-            thread::sleep(time::Duration::from_secs(1));
         }
     });
 
