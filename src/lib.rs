@@ -187,11 +187,13 @@ pub fn analyse(conf: Configuration) -> Vec<BPM> {
                         }
                         State::End => {
                             pb.finish();
+                            println!(""); // there is missing last char
                             break;
                         }
                     },
                     Err(_) => {
                         pb.finish();
+                        println!("");
                         break;
                     }
                 }
