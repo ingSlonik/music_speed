@@ -1,8 +1,10 @@
+use std::path::Path;
+
 use clap::{App, Arg};
 use music_speed::*;
 
 fn main() {
-    let matches = App::new("Speed of Music")
+    let matches = App::new("Music Speed")
         .version("0.1")
         .author("Filip Paulů <ing.fenix@seznam.cz>")
         .about("Analyze of tempo of music for each second.")
@@ -40,27 +42,70 @@ fn main() {
         .arg(
             Arg::with_name("min_bpm")
                 .long("min")
+                .default_value("80")
                 .help("The minimal value sought."),
         )
         .arg(
             Arg::with_name("max_bpm")
                 .long("max")
+                .default_value("160")
                 .help("The maximal value sought."),
         )
         .get_matches();
 
     println!("Welcome in Music Speed v0.1.0.\n");
 
+    let file_path = matches.value_of("input").unwrap();
+
+    let time_interval = match matches
+        .value_of("time_interval")
+        .unwrap_or("1000")
+        .parse::<usize>()
+    {
+        Ok(n) => n,
+        Err(_) => panic!("The time_interval have to be integer."),
+    };
+    let analysis_interval = match matches
+        .value_of("analysis_interval")
+        .unwrap_or("3000")
+        .parse::<usize>()
+    {
+        Ok(n) => n,
+        Err(_) => panic!("The analysis_interval have to be integer."),
+    };
+    let min_bpm = match matches.value_of("min_bpm").unwrap_or("80").parse::<usize>() {
+        Ok(n) => n,
+        Err(_) => panic!("The min_bpm have to be integer."),
+    };
+    let max_bpm = match matches
+        .value_of("max_bpm")
+        .unwrap_or("160")
+        .parse::<usize>()
+    {
+        Ok(n) => n,
+        Err(_) => panic!("The max_bpm have to be integer."),
+    };
+
+    let verbose = match matches.value_of("verbose").unwrap_or("1") {
+        "0" => 0,
+        "1" => 1,
+        _ => panic!("Unknown verbose. allowed values are \"0\" and \"1\"."),
+    };
+
+    if !Path::new(file_path).exists() {
+        panic!("File \"{}\" doesn't exist.", file_path);
+    }
+
     let result = analyse(Configuration {
-        file_path: ".\\__example\\mix10s.mp3",
-        time_interval: 1000,
-        analysis_interval: 2000,
-        min_bpm: 90,
-        max_bpm: 180,
-        verbose: 1,
+        file_path,
+        time_interval,
+        analysis_interval,
+        min_bpm,
+        max_bpm,
+        verbose,
     });
 
-    println!("Time [s]\tBPM");
+    println!("Time s\tBPM");
     result
         .into_iter()
         .for_each(|bpm| println!("{}\t{}", bpm.time, bpm.bpm));
