@@ -7,7 +7,7 @@ Analyze of tempo of music for each second.
 ## Library
 
 ```rust
-use speed_of_music::*;
+use music_speed::*;
 
 fn main() {
     let result = analyse(Configuration {
