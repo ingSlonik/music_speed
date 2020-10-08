@@ -1,5 +1,5 @@
 use clap::{App, Arg};
-use speed_of_music::*;
+use music_speed::*;
 
 fn main() {
     let matches = App::new("Speed of Music")

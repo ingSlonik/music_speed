@@ -1,15 +1,15 @@
 [package]
-name = "speed-of-music"
+name = "music_speed"
 version = "0.1.0"
 authors = ["Filip Paulů <ing.fenix@seznam.cz>"]
 edition = "2018"
 
 [lib]
-name = "speed_of_music"
+name = "music_speed"
 path = "src/lib.rs"
 
 [[bin]]
-name = "speed-of-music"
+name = "music_speed"
 path = "src/bin.rs"
 
 [dependencies]
