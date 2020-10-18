@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <style>
+        html,
+        body {
+            margin: 0px;
+            padding: 0px;
+        }
+
+        body {
+            font-family: 'Open Sans', 'Calibri', sans-serif;
+            font-size: 18px;
+            text-align: center;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: stretch;
+        }
+
+        footer {
+            width: 100%;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            color: #555;
+        }
+
+        footer>div {
+            margin: 4px 16px;
+        }
+
+        #select {
+            cursor: pointer;
+            padding: 64px;
+            margin: 0px 128px;
+            text-align: center;
+            border: 8px dashed #888;
+            color: #888;
+            background-color: white;
+            background-color: #F8F8F8;
+        }
+
+        #select:hover {
+            border-color: #555;
+            color: #000;
+            background-color: #E8E8E8;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Welcome in Music Speed</h1>
+
+    <section>
+        <div id="select">Select MP3 file</div>
+        <pre id="log"></pre>
+    </section>
+
+    <footer>
+        <div class="name">Copyright 2020 Filip Paulu</div>
+        <div class="version">v0.1</div>
+    </footer>
+
+    <script>
+        var dialog = window.__TAURI__.dialog;
+        var invoke = window.__TAURI__.tauri.invoke;
+        var promisified = window.__TAURI__.tauri.promisified;
+
+        document.getElementById("select").addEventListener('click', function (e) {
+            log("click");
+
+            dialog.open().then(path => {
+                log(path);
+                log("Start analyzing");
+                analyze(path).then;
+            })
+        });
+
+        function analyze(path) {
+            invoke({
+                cmd: "analyze",
+                payload: {
+                    path: path,
+                }
+            });
+        }
+
+        var logElement = document.getElementById("log");
+        function log(text) {
+            logElement.innerHTML += JSON.stringify(text, null, "    ") + "\n";
+        }
+    </script>
+</body>
+
+</html>

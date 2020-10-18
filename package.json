@@ -1,0 +1,22 @@
+{
+  "name": "music-speed",
+  "version": "0.1.0",
+  "description": "Analyze of tempo of music for each second.",
+  "main": "index.js",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ingSlonik/music_speed.git"
+  },
+  "author": "Filip Paulů",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ingSlonik/music_speed/issues"
+  },
+  "homepage": "https://github.com/ingSlonik/music_speed#readme",
+  "dependencies": {
+    "tauri": "^0.12.0"
+  }
+}

@@ -24,5 +24,13 @@ fn main() {
 ## CLI
 
 ```
-music_speed --input ./path/to.mp3
+$ music_speed --input ./path/to.mp3
+```
+
+## GUI
+
+### Develop
+
+```
+$ npm run tauri dev
 ```
