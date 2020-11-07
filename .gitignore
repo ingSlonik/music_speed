@@ -1,5 +1,6 @@
 /__example
 /target
+/src-wasm
 **/*.rs.bk
 Cargo.lock
 node_modules
