@@ -1,4 +1,7 @@
 /__example
+/node_modules
+/src-tauri
+/src-wasm
 /target
 **/*.rs.bk
 Cargo.lock
