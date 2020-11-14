@@ -1,6 +1,6 @@
 # Music speed
 
-Analyze of tempo of music for each second.
+Analyse of tempo of music for each second.
 
 ## Motivation
 
@@ -24,5 +24,11 @@ fn main() {
 ## CLI
 
 ```
-music_speed --input ./path/to.mp3
+music_speed -c --input ./path/to.mp3
+```
+
+## GUI
+
+```
+music_speed
 ```

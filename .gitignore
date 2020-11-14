@@ -3,5 +3,7 @@
 /src-tauri
 /src-wasm
 /target
+/src/gui/node_modules
+/src/gui/dist/bundle.js
 **/*.rs.bk
 Cargo.lock
