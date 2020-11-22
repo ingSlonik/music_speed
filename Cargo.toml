@@ -17,3 +17,5 @@ clap = "2.33.3"
 minimp3 = "0.5.0"
 pbr = "1.0.3"
 rayon = "1.4.0"
+web-view = { version = "0.6.3" }
+nfd = { git = "https://github.com/saurvs/nfd-rs.git" }

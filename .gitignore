@@ -4,5 +4,7 @@
 /src-wasm
 /src/gui
 /target
+/src/gui/node_modules
+/src/gui/dist/bundle.js
 **/*.rs.bk
 Cargo.lock
