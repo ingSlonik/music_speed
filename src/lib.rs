@@ -206,6 +206,7 @@ pub fn analyse<'a>(sender: Sender<State>, conf: Configuration) {
     thread::spawn(move || {
         sender.send(State::Start(music_windows.len())).unwrap();
         let end_sender = sender.clone();
+        let end_verbose_sender = verbose_sender.clone();
 
         music_windows.into_par_iter().for_each_with(
             (verbose_sender, sender),
@@ -223,6 +224,7 @@ pub fn analyse<'a>(sender: Sender<State>, conf: Configuration) {
             },
         );
 
+        end_verbose_sender.send(State::End).unwrap();
         end_sender.send(State::End).unwrap();
     });
 }

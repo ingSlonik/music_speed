@@ -4,18 +4,22 @@ version = "0.1.0"
 authors = ["Filip Paulů <ing.fenix@seznam.cz>"]
 edition = "2018"
 
-[lib]
-name = "music_speed"
-path = "src/lib.rs"
-
-[[bin]]
-name = "music_speed"
-path = "src/bin.rs"
+# [lib]
+# name = "music_speed"
+# path = "src/lib.rs"
+#
+# [[bin]]
+# name = "music_speed"
+# path = "src/bin.rs"
+# 
+# [[bin]]
+# name = "music_speed_gui"
+# path = "src/gui.rs"
 
 [dependencies]
 clap = "2.33.3"
 minimp3 = "0.5.0"
 pbr = "1.0.3"
 rayon = "1.4.0"
-web-view = { version = "0.6.3" }
-nfd = { git = "https://github.com/saurvs/nfd-rs.git" }
+druid = { git = "https://github.com/linebender/druid/", features=["im"] }
+# nfd = { git = "https://github.com/saurvs/nfd-rs.git" }
