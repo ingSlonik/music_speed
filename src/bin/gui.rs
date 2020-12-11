@@ -2,12 +2,21 @@ use std::sync::mpsc::channel;
 use std::thread;
 
 use druid::im::{vector, Vector};
-use druid::widget::{Button, Flex, Label};
-use druid::{ commands, Command, Handled, AppDelegate, DelegateCtx, Target, AppLauncher, Env, Data, Lens, LocalizedString, Widget, FontDescriptor, FontFamily, WindowDesc };
+use druid::kurbo::{Circle, Line};
+use druid::lens::{self, LensExt};
+use druid::widget::{Button, Either, Flex, Label, List, Painter, Scroll};
+use druid::RenderContext;
+use druid::{
+    commands, AppDelegate, AppLauncher, Color, Command, Data, DelegateCtx, Env, ExtEventSink,
+    FileDialogOptions, FileSpec, FontDescriptor, FontFamily, Handled, Lens, LocalizedString,
+    PaintCtx, Selector, Target, Widget, WidgetExt, WindowDesc,
+};
 
 use music_speed::*;
 
-#[derive(Clone, Data)]
+const STEP: Selector<BPM> = Selector::new("step");
+
+#[derive(Clone, Data, Lens)]
 struct BPMState {
     time: f32,
     bpm: f32,
@@ -21,7 +30,6 @@ struct AppState {
 
 struct Delegate;
 
-
 impl AppDelegate<AppState> for Delegate {
     fn command(
         &mut self,
@@ -31,16 +39,21 @@ impl AppDelegate<AppState> for Delegate {
         data: &mut AppState,
         _env: &Env,
     ) -> Handled {
-        if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
-            
-            data.file_path = String::from(file_info.path().to_str().unwrap());
-
-            return Handled::Yes;
+        if let Some(file_path) = cmd.get(commands::OPEN_FILE) {
+            data.file_path = String::from(file_path.path().to_str().unwrap());
+            Handled::Yes
+        } else if let Some(bpm) = cmd.get(STEP) {
+            println!("Time: {}, BPM: {}", bpm.time, bpm.bpm);
+            data.result.push_front(BPMState {
+                time: bpm.time,
+                bpm: bpm.bpm,
+            });
+            Handled::Yes
+        } else {
+            Handled::No
         }
-        Handled::No
     }
 }
-
 
 fn main() {
     println!("Welcome in Music Speed v0.1.0.\n");
@@ -61,31 +74,23 @@ fn main() {
         .expect("launch failed");
 }
 
-
-
 fn ui_builder() -> impl Widget<AppState> {
     let h1 = Label::new("Welcome in Music Speed v0.1.0")
         .with_font(FontDescriptor::new(FontFamily::SYSTEM_UI).with_size(32.0));
 
-        let save_dialog_options = 
-    let open_dialog_options =FileDialogOptions::new()
-    .allowed_types(vec![rs, txt, other])
-    .default_type(txt)
-    .default_name(default_save_name)
-    .name_label("Target")
-    .title("Choose a target for this lovely file")
-    .button_text("Export");
-        .default_name("MySavedFile.txt")
-        .name_label("Source")
+    let open_dialog_options = FileDialogOptions::new()
+        .allowed_types(vec![FileSpec::new("Music", &["mp3"])])
+        .name_label("Music")
         .title("Where did you put that file?")
-        .button_text("Import");
+        .button_text("Load");
 
-    let select_file_button = Button::new("Select .mp3 file")
-        .on_click(|ctx, data: &mut AppState, _env| {
-            match open_dialog() {
-                Some(file_path) => data.file_path = file_path,
-                _ => println!("No file")
-            };
+    let select_file_button =
+        Button::new("Select .mp3 file").on_click(move |ctx, data: &mut AppState, _env| {
+            ctx.submit_command(Command::new(
+                druid::commands::SHOW_OPEN_PANEL,
+                open_dialog_options.clone(),
+                Target::Auto,
+            ))
         });
 
     let selected_file = Label::new(|data: &AppState, _env: &Env| {
@@ -96,8 +101,16 @@ fn ui_builder() -> impl Widget<AppState> {
         }
     });
 
-    let analyse_button = Button::new("Analyse").on_click(|_ctx, data: &mut AppState, _env| {
-        run_analyse(data, &data.file_path);
+    let analyse_button = Either::<AppState>::new(
+        |data, _env| data.file_path.len() > 0,
+        Button::new("Analyse").on_click(move |ctx, data: &mut AppState, _env| {
+            run_analyse(ctx.get_external_handle(), &data.file_path);
+        }),
+        Label::new("You have to select file").padding(5.0),
+    );
+
+    let result = Painter::<AppState>::new(|ctx, data, _| {
+        chart(ctx, &data.result);
     });
 
     Flex::column()
@@ -105,22 +118,27 @@ fn ui_builder() -> impl Widget<AppState> {
         .with_child(select_file_button)
         .with_child(selected_file)
         .with_child(analyse_button)
+        .with_flex_child(result, 1.0)
 }
 
-
-fn open_dialog() -> Option<String> {
-    let result = nfd::open_file_dialog(Some("mp3"), None).unwrap_or_else(|e| {
-        panic!(e);
-    });
-
-    match result {
-        Response::Okay(file_path) => Some(file_path),
-        // Response::Cancel => String::from(""),
-        _ => None,
+// TODO: temporary
+fn chart(ctx: &mut PaintCtx, data: &Vector<BPMState>) {
+    let bounds = ctx.size().to_rect();
+    let dot_diam = bounds.width().max(bounds.height()) / 20.;
+    let dot_spacing = dot_diam * 1.8;
+    for y in 0..((bounds.height() / dot_diam).ceil() as usize) {
+        for x in 0..((bounds.width() / dot_diam).ceil() as usize) {
+            let x_offset = (y % 2) as f64 * (dot_spacing / 2.0);
+            let x = x as f64 * dot_spacing + x_offset;
+            let y = y as f64 * dot_spacing;
+            let circ = Circle::new((x, y), dot_diam / 2.0);
+            let purp = Color::rgb(1.0, 0.22, 0.76);
+            ctx.fill(circ, &purp);
+        }
     }
 }
 
-fn run_analyse(data: &mut AppState, file_path: &str) {
+fn run_analyse(sink: ExtEventSink, file_path: &str) {
     let (sender, receiver) = channel();
 
     analyse(
@@ -138,18 +156,14 @@ fn run_analyse(data: &mut AppState, file_path: &str) {
     thread::spawn(move || loop {
         match receiver.recv() {
             Ok(state) => match state {
-                State::Start(size) => {
+                State::Start(_size) => {
                     // handle
                     //     .dispatch(move |webview| webview.eval(&format!("start({})", size)))
                     //     .unwrap();
                 }
                 State::Step(bpm) => {
-                    data.result.push_back(bpm);
-                    //handle
-                    //    .dispatch(move |webview| {
-                    //        webview.eval(&format!("step({}, {})", bpm.time, bpm.bpm))
-                    //    })
-                    //    .unwrap();
+                    sink.submit_command(STEP, bpm, Target::Auto)
+                        .expect("command failed to submit");
                 }
                 State::End => {
                     //handle
