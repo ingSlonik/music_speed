@@ -4,7 +4,7 @@ use std::thread;
 use druid::im::{vector, Vector};
 use druid::kurbo::{Circle, Line};
 use druid::lens::{self, LensExt};
-use druid::widget::{Button, Either, Flex, Label, List, Painter, Scroll};
+use druid::widget::{Button, Either, Flex, Label, List, Painter, ProgressBar};
 use druid::RenderContext;
 use druid::{
     commands, AppDelegate, AppLauncher, Color, Command, Data, DelegateCtx, Env, ExtEventSink,
@@ -14,7 +14,9 @@ use druid::{
 
 use music_speed::*;
 
+const START: Selector<usize> = Selector::new("start");
 const STEP: Selector<BPM> = Selector::new("step");
+const END: Selector<()> = Selector::new("end");
 
 #[derive(Clone, Data, Lens)]
 struct BPMState {
@@ -26,6 +28,9 @@ struct BPMState {
 struct AppState {
     file_path: String,
     result: Vector<BPMState>,
+    is_analyzing: bool,
+    size: usize,
+    progress: f64,
 }
 
 struct Delegate;
@@ -42,12 +47,18 @@ impl AppDelegate<AppState> for Delegate {
         if let Some(file_path) = cmd.get(commands::OPEN_FILE) {
             data.file_path = String::from(file_path.path().to_str().unwrap());
             Handled::Yes
+        } else if let Some(size) = cmd.get(START) {
+            println!("Size: {}", size);
+            data.is_analyzing = true;
+            data.size = *size;
+            Handled::Yes
         } else if let Some(bpm) = cmd.get(STEP) {
             println!("Time: {}, BPM: {}", bpm.time, bpm.bpm);
             data.result.push_front(BPMState {
                 time: bpm.time,
                 bpm: bpm.bpm,
             });
+            data.progress = data.result.len() as f64 / data.size as f64;
             Handled::Yes
         } else {
             Handled::No
@@ -65,6 +76,9 @@ fn main() {
     let data = AppState {
         file_path: "".into(),
         result: vector![],
+        is_analyzing: false,
+        size: 0,
+        progress: 0f64,
     };
 
     AppLauncher::with_window(main_window)
@@ -109,6 +123,12 @@ fn ui_builder() -> impl Widget<AppState> {
         Label::new("You have to select file").padding(5.0),
     );
 
+    let progress = Either::<AppState>::new(
+        |data, _env| data.is_analyzing,
+        ProgressBar::new().lens(AppState::progress),
+        Label::new("You have to run analyse").padding(5.0),
+    );
+
     let result = Painter::<AppState>::new(|ctx, data, _| {
         chart(ctx, &data.result);
     });
@@ -118,6 +138,7 @@ fn ui_builder() -> impl Widget<AppState> {
         .with_child(select_file_button)
         .with_child(selected_file)
         .with_child(analyse_button)
+        .with_child(progress)
         .with_flex_child(result, 1.0)
 }
 
@@ -156,19 +177,17 @@ fn run_analyse(sink: ExtEventSink, file_path: &str) {
     thread::spawn(move || loop {
         match receiver.recv() {
             Ok(state) => match state {
-                State::Start(_size) => {
-                    // handle
-                    //     .dispatch(move |webview| webview.eval(&format!("start({})", size)))
-                    //     .unwrap();
+                State::Start(size) => {
+                    sink.submit_command(START, size, Target::Auto)
+                        .expect("command failed to submit");
                 }
                 State::Step(bpm) => {
                     sink.submit_command(STEP, bpm, Target::Auto)
                         .expect("command failed to submit");
                 }
                 State::End => {
-                    //handle
-                    //    .dispatch(move |webview| webview.eval(&format!("end()")))
-                    //    .unwrap();
+                    sink.submit_command(END, (), Target::Auto)
+                        .expect("command failed to submit");
                     break;
                 }
             },
