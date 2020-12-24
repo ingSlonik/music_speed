@@ -3,13 +3,14 @@ use std::thread;
 
 use druid::im::{vector, Vector};
 use druid::kurbo::{Circle, Line};
-use druid::lens::{self, LensExt};
-use druid::widget::{Button, Either, Flex, Label, List, Painter, ProgressBar};
+// use druid::lens::{self};
+use druid::piet::{FontFamily, Text, TextAlignment, TextLayoutBuilder};
+use druid::widget::{Button, Either, Flex, Label, Painter, ProgressBar, Slider};
 use druid::RenderContext;
 use druid::{
     commands, AppDelegate, AppLauncher, Color, Command, Data, DelegateCtx, Env, ExtEventSink,
-    FileDialogOptions, FileSpec, FontDescriptor, FontFamily, Handled, Lens, LocalizedString,
-    PaintCtx, Selector, Target, Widget, WidgetExt, WindowDesc,
+    FileDialogOptions, FileSpec, FontDescriptor, Handled, Lens, LocalizedString, PaintCtx,
+    Selector, Target, Widget, WidgetExt, WindowDesc,
 };
 
 use music_speed::*;
@@ -20,13 +21,17 @@ const END: Selector<()> = Selector::new("end");
 
 #[derive(Clone, Data, Lens)]
 struct BPMState {
-    time: f32,
+    time: usize,
     bpm: f32,
 }
 
 #[derive(Clone, Data, Lens)]
 struct AppState {
     file_path: String,
+    time_interval: f64,
+    analysis_interval: f64,
+    min_bpm: f64,
+    max_bpm: f64,
     result: Vector<BPMState>,
     is_analyzing: bool,
     size: usize,
@@ -53,11 +58,13 @@ impl AppDelegate<AppState> for Delegate {
             data.size = *size;
             Handled::Yes
         } else if let Some(bpm) = cmd.get(STEP) {
-            println!("Time: {}, BPM: {}", bpm.time, bpm.bpm);
+            println!("\nTime: {:.2}, BPM: {}", bpm.time as f32 / 1000.0, bpm.bpm);
             data.result.push_front(BPMState {
                 time: bpm.time,
                 bpm: bpm.bpm,
             });
+            data.result
+                .sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
             data.progress = data.result.len() as f64 / data.size as f64;
             Handled::Yes
         } else {
@@ -71,10 +78,14 @@ fn main() {
 
     let main_window = WindowDesc::new(ui_builder)
         .title(LocalizedString::new("Music Speed"))
-        .window_size((600.0, 400.0));
+        .window_size((700.0, 600.0));
 
     let data = AppState {
         file_path: "".into(),
+        time_interval: 2000f64,
+        analysis_interval: 3500f64,
+        min_bpm: 80f64,
+        max_bpm: 160f64,
         result: vector![],
         is_analyzing: false,
         size: 0,
@@ -98,14 +109,13 @@ fn ui_builder() -> impl Widget<AppState> {
         .title("Where did you put that file?")
         .button_text("Load");
 
-    let select_file_button =
-        Button::new("Select .mp3 file").on_click(move |ctx, data: &mut AppState, _env| {
-            ctx.submit_command(Command::new(
-                druid::commands::SHOW_OPEN_PANEL,
-                open_dialog_options.clone(),
-                Target::Auto,
-            ))
-        });
+    let select_file_button = Button::new("Select .mp3 file").on_click(move |ctx, _data, _env| {
+        ctx.submit_command(Command::new(
+            druid::commands::SHOW_OPEN_PANEL,
+            open_dialog_options.clone(),
+            Target::Auto,
+        ))
+    });
 
     let selected_file = Label::new(|data: &AppState, _env: &Env| {
         if data.file_path.len() == 0 {
@@ -118,61 +128,235 @@ fn ui_builder() -> impl Widget<AppState> {
     let analyse_button = Either::<AppState>::new(
         |data, _env| data.file_path.len() > 0,
         Button::new("Analyse").on_click(move |ctx, data: &mut AppState, _env| {
-            run_analyse(ctx.get_external_handle(), &data.file_path);
+            run_analyse(
+                ctx.get_external_handle(),
+                Configuration {
+                    file_path: &data.file_path,
+                    time_interval: data.time_interval as usize,
+                    analysis_interval: data.analysis_interval as usize,
+                    min_bpm: data.min_bpm as usize,
+                    max_bpm: data.max_bpm as usize,
+                    verbose: 1, // TODO: set to 0
+                },
+            );
         }),
         Label::new("You have to select file").padding(5.0),
     );
 
     let progress = Either::<AppState>::new(
         |data, _env| data.is_analyzing,
-        ProgressBar::new().lens(AppState::progress),
+        Flex::row()
+            .with_default_spacer()
+            .with_flex_child(
+                ProgressBar::new().expand_width().lens(AppState::progress),
+                1.0,
+            )
+            .with_default_spacer()
+            .with_child(Label::new(|data: &AppState, _env: &Env| {
+                format!("{:.2} %", data.progress * 100.0)
+            }))
+            .with_default_spacer(),
         Label::new("You have to run analyse").padding(5.0),
     );
 
     let result = Painter::<AppState>::new(|ctx, data, _| {
-        chart(ctx, &data.result);
+        if data.result.len() > 0 {
+            chart(ctx, &data);
+        }
     });
 
     Flex::column()
         .with_child(h1)
+        .with_default_spacer()
         .with_child(select_file_button)
+        .with_default_spacer()
         .with_child(selected_file)
+        .with_default_spacer()
+        .with_child(
+            Flex::row()
+                .with_default_spacer()
+                .with_flex_child(
+                    Flex::column()
+                        .with_child(number(
+                            "Time interval:",
+                            500f64,
+                            5000f64,
+                            AppState::time_interval,
+                            |data| format!("{:.2} s", data.time_interval / 1000f64),
+                        ))
+                        .with_default_spacer()
+                        .with_child(number(
+                            "Analysis interval:",
+                            1000f64,
+                            10000f64,
+                            AppState::analysis_interval,
+                            |data| format!("{:.2} s", data.analysis_interval / 1000f64),
+                        )),
+                    1.0,
+                )
+                .with_default_spacer()
+                .with_flex_child(
+                    Flex::column()
+                        .with_child(number("Min:", 20f64, 200f64, AppState::min_bpm, |data| {
+                            format!("{:.0} BPM", data.min_bpm)
+                        }))
+                        .with_default_spacer()
+                        .with_child(number("Max:", 40f64, 400f64, AppState::max_bpm, |data| {
+                            format!("{:.0} BPM", data.max_bpm)
+                        })),
+                    1.0,
+                )
+                .with_default_spacer(),
+        )
+        .with_default_spacer()
         .with_child(analyse_button)
+        .with_default_spacer()
         .with_child(progress)
+        .with_default_spacer()
         .with_flex_child(result, 1.0)
 }
 
-// TODO: temporary
-fn chart(ctx: &mut PaintCtx, data: &Vector<BPMState>) {
+fn number<S: Data, T: 'static + Lens<S, f64>>(
+    label: &str,
+    min: f64,
+    max: f64,
+    lens: T,
+    text: fn(&S) -> String,
+) -> Flex<S> {
+    Flex::row()
+        .with_child(Label::new(label))
+        .with_flex_child(
+            Slider::new().with_range(min, max).expand_width().lens(lens),
+            1.0,
+        )
+        .with_child(Label::new(move |data: &S, _env: &Env| text(data)))
+}
+
+fn chart(ctx: &mut PaintCtx, state: &AppState) {
     let bounds = ctx.size().to_rect();
-    let dot_diam = bounds.width().max(bounds.height()) / 20.;
-    let dot_spacing = dot_diam * 1.8;
-    for y in 0..((bounds.height() / dot_diam).ceil() as usize) {
-        for x in 0..((bounds.width() / dot_diam).ceil() as usize) {
-            let x_offset = (y % 2) as f64 * (dot_spacing / 2.0);
-            let x = x as f64 * dot_spacing + x_offset;
-            let y = y as f64 * dot_spacing;
-            let circ = Circle::new((x, y), dot_diam / 2.0);
-            let purp = Color::rgb(1.0, 0.22, 0.76);
-            ctx.fill(circ, &purp);
+
+    let duration = state.size as f64 * state.time_interval;
+
+    // axis
+    let axis_width = 1.0;
+    let axis_color = Color::rgb(1.0, 1.0, 1.0);
+    let axis_label_color = Color::rgb(1.0, 1.0, 1.0);
+    let axis_label_padding = 4.0;
+    let axis_font_size = 14.0;
+    let x_offset = 32.0;
+    let y_offset = 24.0;
+
+    let width = bounds.width() - x_offset * 2.0;
+    let height = bounds.height() - y_offset * 2.0;
+
+    // x axis
+    {
+        let line = Line::new(
+            (x_offset, bounds.height() - y_offset),
+            (bounds.width() - x_offset, bounds.height() - y_offset),
+        );
+        ctx.stroke(line, &axis_color, axis_width);
+
+        // labels
+        let min_text = ctx
+            .text()
+            .new_text_layout("0")
+            .font(FontFamily::SERIF, axis_font_size)
+            .text_color(axis_label_color.clone())
+            .alignment(TextAlignment::Start)
+            .build()
+            .unwrap();
+        ctx.draw_text(
+            &min_text,
+            (x_offset, height + y_offset + axis_label_padding),
+        );
+
+        let max_text = ctx
+            .text()
+            .new_text_layout(format!("{:.0} [s]", duration / 1000.0))
+            .font(FontFamily::SERIF, axis_font_size)
+            .text_color(axis_label_color.clone())
+            .alignment(TextAlignment::End)
+            .max_width(width)
+            .build()
+            .unwrap();
+        ctx.draw_text(
+            &max_text,
+            (x_offset, height + y_offset + axis_label_padding),
+        );
+    }
+
+    // y axis
+    {
+        let line = Line::new((x_offset, y_offset), (x_offset, bounds.height() - y_offset));
+        ctx.stroke(line, &axis_color, axis_width);
+
+        // labels
+        let max_bpm_text = ctx
+            .text()
+            .new_text_layout(format!("{:.0}", state.max_bpm))
+            .font(FontFamily::SERIF, axis_font_size)
+            .text_color(axis_label_color.clone())
+            .alignment(TextAlignment::End)
+            .max_width(x_offset - axis_label_padding)
+            .build()
+            .unwrap();
+        ctx.draw_text(&max_bpm_text, (0.0, y_offset - axis_font_size / 2.0));
+
+        let min_bpm_text = ctx
+            .text()
+            .new_text_layout(format!("{:.0}", state.min_bpm))
+            .font(FontFamily::SERIF, axis_font_size)
+            .text_color(axis_label_color.clone())
+            .alignment(TextAlignment::End)
+            .max_width(x_offset - axis_label_padding)
+            .build()
+            .unwrap();
+        ctx.draw_text(
+            &min_bpm_text,
+            (0.0, bounds.height() - y_offset - axis_font_size / 2.0),
+        );
+    }
+
+    // Line
+    let line_color = Color::rgb(0.0, 0.0, 1.0);
+    let line_width = 2.0;
+    let circle_radius = 4.0;
+
+    {
+        let mut x_before = 0.0;
+        let mut y_before = 0.0;
+
+        // the result is sorted by time
+        for result in state.result.iter() {
+            let x = result.time as f64 / duration * width;
+            let y = ((result.bpm - state.min_bpm as f32)
+                / (state.max_bpm as f32 - state.min_bpm as f32)) as f64
+                * height;
+
+            ctx.stroke(
+                Line::new(
+                    (x_offset + x_before, y_offset + y_before),
+                    (x_offset + x, y_offset + y),
+                ),
+                &line_color,
+                line_width,
+            );
+            ctx.fill(
+                Circle::new((x_offset + x, y_offset + y), circle_radius),
+                &line_color,
+            );
+
+            x_before = x;
+            y_before = y;
         }
     }
 }
 
-fn run_analyse(sink: ExtEventSink, file_path: &str) {
+fn run_analyse(sink: ExtEventSink, conf: Configuration) {
     let (sender, receiver) = channel();
 
-    analyse(
-        sender,
-        Configuration {
-            file_path: &file_path,
-            time_interval: 1000,
-            analysis_interval: 2000,
-            min_bpm: 80,
-            max_bpm: 160,
-            verbose: 1,
-        },
-    );
+    analyse(sender, conf);
 
     thread::spawn(move || loop {
         match receiver.recv() {
@@ -192,9 +376,7 @@ fn run_analyse(sink: ExtEventSink, file_path: &str) {
                 }
             },
             Err(_) => {
-                //handle
-                //    .dispatch(move |webview| webview.eval(&format!("log('Error!')")))
-                //    .unwrap();
+                // TODO: handle it
                 break;
             }
         }
