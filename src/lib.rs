@@ -16,7 +16,7 @@ pub struct Configuration<'a> {
 }
 #[derive(Copy, Clone)]
 pub struct BPM {
-    pub time: f32,
+    pub time: usize,
     pub bpm: f32,
 }
 
@@ -208,15 +208,15 @@ pub fn analyse<'a>(sender: Sender<State>, conf: Configuration) {
         let end_sender = sender.clone();
         let end_verbose_sender = verbose_sender.clone();
 
-        music_windows.into_par_iter().for_each_with(
+        music_windows.par_iter().for_each_with(
             (verbose_sender, sender),
             |(s1, s2), windows| {
                 let correlation = get_correlation(&windows.1, &windows.2);
 
-                let (_, index) = get_max(correlation);
-                let bpm_value = (samples_from + index) as f32 * 60.0 / sample_rate as f32;
+                let (_, index_max) = get_max(correlation);
+                let bpm_value = (samples_from + index_max) as f32 * 60.0 / sample_rate as f32;
                 let bpm = BPM {
-                    time: (index * time_interval) as f32 / 1000f32,
+                    time: windows.0 * time_interval,
                     bpm: bpm_value,
                 };
                 s1.send(State::Step(bpm)).unwrap();
